@@ -31,7 +31,7 @@ namespace net
             }
         }
 
-        std::optional<TcpStream> connect(const std::string &address, int port, std::error_code &ec)
+        bool connect(const std::string &address, int port, std::error_code &ec)
         {
             // 创建 io_uring 实例
             auto *ring = new io_uring();
@@ -39,7 +39,7 @@ namespace net
             {
                 ec = std::make_error_code(std::errc::io_error);
                 delete ring;
-                return std::nullopt;
+                return false;
             }
 
             // 创建 socket
@@ -49,7 +49,7 @@ namespace net
                 ec = std::make_error_code(std::errc::address_family_not_supported);
                 io_uring_queue_exit(ring);
                 delete ring;
-                return std::nullopt;
+                return false;
             }
 
             sockaddr_in server_addr = {};
@@ -61,7 +61,7 @@ namespace net
                 close(socket_fd);
                 io_uring_queue_exit(ring);
                 delete ring;
-                return std::nullopt;
+                return false;
             }
 
             // 使用 io_uring 提交异步连接请求
@@ -77,7 +77,7 @@ namespace net
                 close(socket_fd);
                 io_uring_queue_exit(ring);
                 delete ring;
-                return std::nullopt;
+                return false;
             }
 
             if (cqe->res < 0)
@@ -87,11 +87,15 @@ namespace net
                 io_uring_cqe_seen(ring, cqe);
                 io_uring_queue_exit(ring);
                 delete ring;
-                return std::nullopt;
+                return false;
             }
 
             io_uring_cqe_seen(ring, cqe);
-            return TcpStream(new Impl(socket_fd, ring));
+
+            // 连接成功
+            socket_fd_ = socket_fd; // 保存 socket_fd
+            ring_ = ring;           // 保存 io_uring 实例
+            return true;
         }
 
         size_t write(const std::vector<uint8_t> &data, std::error_code &ec)
@@ -164,64 +168,6 @@ namespace net
         int socket_fd_;
         io_uring *ring_;
     };
-
-    // TcpStream 类的构造和析构
-    TcpStream::TcpStream() : impl_(nullptr) {}
-
-    TcpStream::~TcpStream()
-    {
-        delete impl_;
-    }
-
-    // 移动构造和赋值
-    TcpStream::TcpStream(TcpStream &&other) noexcept : impl_(other.impl_)
-    {
-        other.impl_ = nullptr;
-    }
-
-    TcpStream &TcpStream::operator=(TcpStream &&other) noexcept
-    {
-        if (this != &other)
-        {
-            delete impl_;
-            impl_ = other.impl_;
-            other.impl_ = nullptr;
-        }
-        return *this;
-    }
-
-    // 连接到远程主机
-    std::optional<TcpStream> TcpStream::connect(const std::string &address, int port, std::error_code &ec)
-    {
-        TcpStream stream;
-        if (stream.impl_->connect(address, port, ec))
-        {
-            return stream;
-        }
-        return std::nullopt;
-    }
-
-    // 写数据
-    size_t TcpStream::write(const std::vector<uint8_t> &data, std::error_code &ec)
-    {
-        if (!impl_)
-        {
-            ec = std::make_error_code(std::errc::bad_file_descriptor);
-            return 0;
-        }
-        return impl_->write(data, ec);
-    }
-
-    // 读数据
-    size_t TcpStream::read(std::vector<uint8_t> &buffer, std::error_code &ec)
-    {
-        if (!impl_)
-        {
-            ec = std::make_error_code(std::errc::bad_file_descriptor);
-            return 0;
-        }
-        return impl_->read(buffer, ec);
-    }
 
 } // namespace net
 
