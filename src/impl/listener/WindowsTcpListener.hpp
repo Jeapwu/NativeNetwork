@@ -168,23 +168,47 @@ namespace net
                     std::cerr << "IOCP error: " << GetLastError() << std::endl;
                     continue;
                 }
-                // Handle the IOCP completion event (e.g., AcceptEx, Send, Receive)
+
                 if (overlapped)
                 {
-                    // 如果是 AcceptEx 完成
-                    if (completion_key == 1)
+                    // Cast to custom OVERLAPPED structure
+                    auto *context = reinterpret_cast<ClientContext *>(overlapped);
+
+                    // Handle different IO operations
+                    if (context->operation == IOOperation::Receive)
                     {
-                        // 这里我们已经在 accept() 中处理了 AcceptEx 的完成
+                        // Echo the received data back to the client
+                        context->wsa_buf.len = bytes_transferred;
+                        context->operation = IOOperation::Send;
+
+                        DWORD bytes_sent = 0;
+                        if (WSASend(context->socket, &context->wsa_buf, 1, &bytes_sent, 0, &context->overlapped, nullptr) == SOCKET_ERROR)
+                        {
+                            if (WSAGetLastError() != WSA_IO_PENDING)
+                            {
+                                std::cerr << "WSASend failed: " << WSAGetLastError() << std::endl;
+                                closesocket(context->socket);
+                                delete context;
+                            }
+                        }
                     }
-                    // 如果是 Send 操作完成
-                    else if (completion_key == 2)
+                    else if (context->operation == IOOperation::Send)
                     {
-                        std::cout << "Send operation completed, bytes transferred: " << bytes_transferred << std::endl;
-                    }
-                    // 如果是 Receive 操作完成
-                    else if (completion_key == 3)
-                    {
-                        std::cout << "Receive operation completed, bytes received: " << bytes_transferred << std::endl;
+                        // Reuse the context to receive more data
+                        context->wsa_buf.len = sizeof(context->buffer);
+                        context->operation = IOOperation::Receive;
+
+                        DWORD flags = 0;
+                        DWORD bytes_received = 0;
+                        if (WSARecv(context->socket, &context->wsa_buf, 1, &bytes_received, &flags, &context->overlapped, nullptr) == SOCKET_ERROR)
+                        {
+                            if (WSAGetLastError() != WSA_IO_PENDING)
+                            {
+                                std::cerr << "WSARecv failed: " << WSAGetLastError() << std::endl;
+                                closesocket(context->socket);
+                                delete context;
+                            }
+                        }
                     }
                 }
             }
