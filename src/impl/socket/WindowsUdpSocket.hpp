@@ -9,7 +9,6 @@
 #include <stdexcept>
 #include <optional>
 #include <system_error>
-#include "network_lib.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -49,30 +48,37 @@ namespace net
                 CloseHandle(iocp_);
         }
 
-        void bind(const std::string &address, int port)
+        // 绑定到本地地址和端口
+        bool bind(const std::string &address, int port, std::error_code &ec)
         {
             sockaddr_in local_addr = {};
             local_addr.sin_family = AF_INET;
             local_addr.sin_port = htons(port);
             if (inet_pton(AF_INET, address.c_str(), &local_addr.sin_addr) <= 0)
             {
-                throw std::runtime_error("Invalid address");
+                ec = std::make_error_code(std::errc::invalid_argument);
+                return false;
             }
 
             if (::bind(socket_, reinterpret_cast<sockaddr *>(&local_addr), sizeof(local_addr)) == SOCKET_ERROR)
             {
-                throw std::system_error(WSAGetLastError(), std::system_category(), "Bind failed");
+                ec = std::make_error_code(static_cast<std::errc>(WSAGetLastError()));
+                return false;
             }
+
+            return true;
         }
 
-        void send_to(const std::vector<uint8_t> &data, const std::string &address, int port)
+        // 发送数据到目标地址
+        size_t send_to(const std::vector<uint8_t> &data, const std::string &address, int port, std::error_code &ec)
         {
             sockaddr_in remote_addr = {};
             remote_addr.sin_family = AF_INET;
             remote_addr.sin_port = htons(port);
             if (inet_pton(AF_INET, address.c_str(), &remote_addr.sin_addr) <= 0)
             {
-                throw std::runtime_error("Invalid remote address");
+                ec = std::make_error_code(std::errc::invalid_argument);
+                return 0;
             }
 
             auto *key = new IOCPKey{IOCPKey::Type::Send, {}, data, {}, 0};
@@ -86,13 +92,17 @@ namespace net
             if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
             {
                 delete key;
-                throw std::system_error(WSAGetLastError(), std::system_category(), "WSASendTo failed");
+                ec = std::make_error_code(static_cast<std::errc>(WSAGetLastError()));
+                return 0;
             }
+
+            return bytes_sent;
         }
 
-        std::optional<std::pair<std::vector<uint8_t>, sockaddr_in>> recv_from()
+        // 从远程地址接收数据
+        std::optional<std::pair<std::vector<uint8_t>, sockaddr_in>> recv_from(std::error_code &ec)
         {
-            sockaddr_storage remote_addr = {};
+            sockaddr_in remote_addr = {};
             int remote_addr_len = sizeof(remote_addr);
 
             auto *key = new IOCPKey{IOCPKey::Type::Receive, {}, std::vector<uint8_t>(1024), {}, 0};
@@ -106,10 +116,12 @@ namespace net
             if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
             {
                 delete key;
-                throw std::system_error(WSAGetLastError(), std::system_category(), "WSARecvFrom failed");
+                ec = std::make_error_code(static_cast<std::errc>(WSAGetLastError()));
+                return std::nullopt;
             }
 
-            return std::nullopt; // 实际上需要通过回调处理收到的数据
+            // 此处需要通过回调处理实际接收到的数据，这里仅模拟返回
+            return std::nullopt;
         }
 
     private:
@@ -118,6 +130,7 @@ namespace net
         std::atomic<bool> running_;
         std::thread worker_thread_;
 
+        // IOCP 工作线程，处理完成的异步操作
         void iocp_worker()
         {
             while (running_)
@@ -149,70 +162,5 @@ namespace net
             }
         }
     };
-
-    UdpSocket::UdpSocket() : impl_(nullptr) {}
-
-    UdpSocket::~UdpSocket() { delete impl_; }
-
-    UdpSocket::UdpSocket(UdpSocket &&other) noexcept : impl_(other.impl_)
-    {
-        other.impl_ = nullptr;
-    }
-
-    UdpSocket &UdpSocket::operator=(UdpSocket &&other) noexcept
-    {
-        if (this != &other)
-        {
-            delete impl_;
-            impl_ = other.impl_;
-            other.impl_ = nullptr;
-        }
-        return *this;
-    }
-
-    UdpSocket UdpSocket::bind(const std::string &address, int port)
-    {
-        WSADATA wsa_data;
-        if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
-        {
-            throw std::system_error(WSAGetLastError(), std::system_category(), "WSAStartup failed");
-        }
-
-        SOCKET socket_fd = WSASocket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, nullptr, 0, WSA_FLAG_OVERLAPPED);
-        if (socket_fd == INVALID_SOCKET)
-        {
-            throw std::system_error(WSAGetLastError(), std::system_category(), "Socket creation failed");
-        }
-
-        HANDLE iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
-        if (iocp == nullptr)
-        {
-            closesocket(socket_fd);
-            throw std::system_error(GetLastError(), std::system_category(), "IOCP creation failed");
-        }
-
-        if (CreateIoCompletionPort(reinterpret_cast<HANDLE>(socket_fd), iocp, 0, 0) == nullptr)
-        {
-            CloseHandle(iocp);
-            closesocket(socket_fd);
-            throw std::system_error(GetLastError(), std::system_category(), "Socket association with IOCP failed");
-        }
-
-        auto udp_socket = UdpSocket();
-        udp_socket.impl_ = new Impl(socket_fd, iocp);
-        udp_socket.impl_->bind(address, port);
-
-        return udp_socket;
-    }
-
-    void UdpSocket::send_to(const std::vector<uint8_t> &data, const std::string &address, int port)
-    {
-        impl_->send_to(data, address, port);
-    }
-
-    std::optional<std::pair<std::vector<uint8_t>, sockaddr_in>> UdpSocket::recv_from()
-    {
-        return impl_->recv_from();
-    }
 
 } // namespace net

@@ -7,71 +7,127 @@
 #include <atomic>
 #include <system_error>
 #include <optional>
-#include "network_lib.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
 namespace net
 {
-
     class TcpListener::Impl
     {
     public:
-        Impl(SOCKET socket, HANDLE iocp) : socket_(socket), iocp_(iocp), running_(true)
-        {
-            worker_thread_ = std::thread(&Impl::iocp_worker, this);
-        }
+        TcpListener() : iocp_(nullptr), running_(false) {}
 
         ~Impl()
         {
-            running_ = false;
-            if (worker_thread_.joinable())
-                worker_thread_.join();
-            if (socket_ != INVALID_SOCKET)
-                closesocket(socket_);
-            if (iocp_ != nullptr)
+            if (running_)
+            {
+                running_ = false;
+                if (worker_thread_.joinable())
+                    worker_thread_.join();
+            }
+
+            if (iocp_)
+            {
                 CloseHandle(iocp_);
+                iocp_ = nullptr;
+            }
+
+            if (listener_ != INVALID_SOCKET)
+            {
+                closesocket(listener_);
+                listener_ = INVALID_SOCKET;
+            }
         }
 
-        void bind(const std::string &address, int port)
+        bool bind(const std::string &address, int port, std::error_code &ec)
         {
+            // 创建监听 socket
+            listener_ = ::socket(AF_INET, SOCK_STREAM, 0);
+            if (listener_ == INVALID_SOCKET)
+            {
+                ec = std::make_error_code(static_cast<std::errc>(WSAGetLastError()));
+                return false;
+            }
+
             sockaddr_in local_addr = {};
             local_addr.sin_family = AF_INET;
             local_addr.sin_port = htons(port);
             if (inet_pton(AF_INET, address.c_str(), &local_addr.sin_addr) <= 0)
             {
-                throw std::runtime_error("Invalid address");
+                ec = std::make_error_code(std::errc::invalid_argument);
+                closesocket(listener_);
+                listener_ = INVALID_SOCKET;
+                return false;
             }
 
-            if (::bind(socket_, reinterpret_cast<sockaddr *>(&local_addr), sizeof(local_addr)) == SOCKET_ERROR)
+            if (::bind(listener_, reinterpret_cast<sockaddr *>(&local_addr), sizeof(local_addr)) == SOCKET_ERROR)
             {
-                throw std::system_error(WSAGetLastError(), std::system_category(), "Bind failed");
+                ec = std::make_error_code(static_cast<std::errc>(WSAGetLastError()));
+                closesocket(listener_);
+                listener_ = INVALID_SOCKET;
+                return false;
             }
+
+            // 创建 IOCP
+            iocp_ = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
+            if (!iocp_)
+            {
+                ec = std::make_error_code(static_cast<std::errc>(GetLastError()));
+                closesocket(listener_);
+                listener_ = INVALID_SOCKET;
+                return false;
+            }
+
+            // 关联 listener socket 到 IOCP
+            if (!CreateIoCompletionPort(reinterpret_cast<HANDLE>(listener_), iocp_, 0, 0))
+            {
+                ec = std::make_error_code(static_cast<std::errc>(GetLastError()));
+                closesocket(listener_);
+                listener_ = INVALID_SOCKET;
+                CloseHandle(iocp_);
+                iocp_ = nullptr;
+                return false;
+            }
+
+            // 启动 IOCP 工作线程
+            running_ = true;
+            worker_thread_ = std::thread(&TcpListener::iocp_worker, this);
+
+            return true;
         }
 
-        void listen(int backlog = SOMAXCONN)
+        void TcpListener::listen(int backlog)
         {
-            if (::listen(socket_, backlog) == SOCKET_ERROR)
+            if (::listen(listener_, backlog) == SOCKET_ERROR)
             {
                 throw std::system_error(WSAGetLastError(), std::system_category(), "Listen failed");
             }
         }
 
-        std::optional<TcpStream> accept()
+        std::optional<TcpStream> TcpListener::accept(std::error_code &ec)
         {
-            // Allocate buffers for AcceptEx
             char accept_buffer[(sizeof(sockaddr_in) + 16) * 2] = {};
             auto *overlapped = new OVERLAPPED{};
 
+            SOCKET client_socket = ::socket(AF_INET, SOCK_STREAM, 0);
+            if (client_socket == INVALID_SOCKET)
+            {
+                ec = std::make_error_code(static_cast<std::errc>(WSAGetLastError()));
+                delete overlapped;
+                return std::nullopt;
+            }
+
             DWORD bytes_received = 0;
-            int result = AcceptEx(socket_, INVALID_SOCKET, accept_buffer, 0,
+            int result = AcceptEx(listener_, client_socket, accept_buffer, 0,
                                   sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16,
                                   &bytes_received, overlapped);
 
             if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
             {
                 delete overlapped;
-                throw std::system_error(WSAGetLastError(), std::system_category(), "AcceptEx failed");
+                closesocket(client_socket);
+                ec = std::make_error_code(static_cast<std::errc>(WSAGetLastError()));
+                return std::nullopt;
             }
 
             // 等待 IOCP 事件完成
@@ -83,24 +139,18 @@ namespace net
             if (!success || completed_overlapped != overlapped)
             {
                 delete overlapped;
-                throw std::system_error(GetLastError(), std::system_category(), "AcceptEx failed to complete");
+                closesocket(client_socket);
+                ec = std::make_error_code(static_cast<std::errc>(GetLastError()));
+                return std::nullopt;
             }
 
-            // Extract client socket from AcceptEx buffer
-            SOCKET client_socket = reinterpret_cast<SOCKET>(completion_key);
-            if (client_socket == INVALID_SOCKET)
-            {
-                delete overlapped;
-                throw std::system_error(WSAGetLastError(), std::system_category(), "Invalid client socket");
-            }
-
-            // Return TcpStream wrapping the client socket
+            delete overlapped;
             return TcpStream(client_socket);
         }
 
     private:
-        SOCKET socket_;
-        HANDLE iocp_;
+        SOCKET listener_ = INVALID_SOCKET;
+        HANDLE iocp_ = nullptr;
         std::atomic<bool> running_;
         std::thread worker_thread_;
 
@@ -118,71 +168,27 @@ namespace net
                     std::cerr << "IOCP error: " << GetLastError() << std::endl;
                     continue;
                 }
-
                 // Handle the IOCP completion event (e.g., AcceptEx, Send, Receive)
+                if (overlapped)
+                {
+                    // 如果是 AcceptEx 完成
+                    if (completion_key == 1)
+                    {
+                        // 这里我们已经在 accept() 中处理了 AcceptEx 的完成
+                    }
+                    // 如果是 Send 操作完成
+                    else if (completion_key == 2)
+                    {
+                        std::cout << "Send operation completed, bytes transferred: " << bytes_transferred << std::endl;
+                    }
+                    // 如果是 Receive 操作完成
+                    else if (completion_key == 3)
+                    {
+                        std::cout << "Receive operation completed, bytes received: " << bytes_transferred << std::endl;
+                    }
+                }
             }
         }
     };
-
-    TcpListener::TcpListener() : impl_(nullptr) {}
-
-    TcpListener::~TcpListener() { delete impl_; }
-
-    TcpListener::TcpListener(TcpListener &&other) noexcept : impl_(other.impl_)
-    {
-        other.impl_ = nullptr;
-    }
-
-    TcpListener &TcpListener::operator=(TcpListener &&other) noexcept
-    {
-        if (this != &other)
-        {
-            delete impl_;
-            impl_ = other.impl_;
-            other.impl_ = nullptr;
-        }
-        return *this;
-    }
-
-    TcpListener TcpListener::bind(const std::string &address, int port)
-    {
-        WSADATA wsa_data;
-        if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
-        {
-            throw std::system_error(WSAGetLastError(), std::system_category(), "WSAStartup failed");
-        }
-
-        SOCKET socket_fd = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
-        if (socket_fd == INVALID_SOCKET)
-        {
-            throw std::system_error(WSAGetLastError(), std::system_category(), "Socket creation failed");
-        }
-
-        HANDLE iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
-        if (iocp == nullptr)
-        {
-            closesocket(socket_fd);
-            throw std::system_error(GetLastError(), std::system_category(), "IOCP creation failed");
-        }
-
-        if (CreateIoCompletionPort(reinterpret_cast<HANDLE>(socket_fd), iocp, 0, 0) == nullptr)
-        {
-            CloseHandle(iocp);
-            closesocket(socket_fd);
-            throw std::system_error(GetLastError(), std::system_category(), "Socket association with IOCP failed");
-        }
-
-        auto listener = TcpListener();
-        listener.impl_ = new Impl(socket_fd, iocp);
-        listener.impl_->bind(address, port);
-        listener.impl_->listen();
-
-        return listener;
-    }
-
-    std::optional<TcpStream> TcpListener::accept()
-    {
-        return impl_->accept();
-    }
 
 } // namespace net

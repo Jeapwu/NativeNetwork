@@ -1,7 +1,6 @@
 #ifndef LINUX_TCP_STREAM_H
 #define LINUX_TCP_STREAM_H
 
-#include "TcpStream.hpp"
 #include <liburing.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -13,7 +12,6 @@
 
 namespace net
 {
-
     // TcpStream::Impl for Linux with io_uring
     class TcpStream::Impl
     {

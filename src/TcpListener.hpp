@@ -8,7 +8,6 @@
 
 namespace net
 {
-
     class TcpListener
     {
     public:

@@ -1,7 +1,6 @@
 #ifndef WINDOWS_TCP_STREAM_H
 #define WINDOWS_TCP_STREAM_H
 
-#include "TcpStream.hpp"
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdexcept>

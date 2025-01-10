@@ -1,7 +1,6 @@
 #ifndef MAC_TCP_STREAM_H
 #define MAC_TCP_STREAM_H
 
-#include "TcpStream.hpp"
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
