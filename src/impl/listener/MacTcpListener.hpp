@@ -1,3 +1,6 @@
+#ifndef WINDOWS_TCP_LISTENER_H
+#define WINDOWS_TCP_LISTENER_H
+
 #include "TcpListener.h"
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -95,3 +98,5 @@ namespace net
     };
 
 } // namespace net
+
+#endif // WINDOWS_TCP_LISTENER_H
