@@ -19,10 +19,9 @@ include_directories(${INCLUDE_DIRS})
 # 动态库
 add_library(NetworkLibShared SHARED ${SOURCES})
 target_include_directories(NetworkLibShared PUBLIC ${INCLUDE_DIRS})
-set_target_properties(NetworkLibShared PROPERTIES OUTPUT_NAME "NetworkLib")
+set_target_properties(NetworkLibShared PROPERTIES OUTPUT_NAME "NativeNetwork")
 
 # 静态库
 add_library(NetworkLibStatic STATIC ${SOURCES})
 target_include_directories(NetworkLibStatic PUBLIC ${INCLUDE_DIRS})
-set_target_properties(NetworkLibStatic PROPERTIES OUTPUT_NAME "NetworkLib")
-
+set_target_properties(NetworkLibStatic PROPERTIES OUTPUT_NAME "NativeNetwork")

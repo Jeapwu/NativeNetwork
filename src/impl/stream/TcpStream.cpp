@@ -13,7 +13,7 @@
 namespace net
 {
     // TcpStream 类的构造和析构
-    TcpStream::TcpStream() : impl_(nullptr) {}
+    TcpStream::TcpStream() : impl_(new Impl()) {}
 
     TcpStream::TcpStream(SOCKET socket) : impl_(new Impl(socket)) {}
 

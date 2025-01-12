@@ -1,8 +1,8 @@
 # 示例源文件
 set(EXAMPLE_SOURCES
-    TcpClient.cpp
-    TcpServer.cpp
-    UdpServer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/echo/tcp/TcpClient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/echo/tcp/TcpServer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/echo/udp/UdpServer.cpp
 )
 
 # 添加头文件路径
