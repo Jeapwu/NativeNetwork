@@ -3,9 +3,9 @@
 #if defined(_WIN32)
 #include "WindowsTcpStream.h"
 #elif defined(__linux__)
-#include "LinuxTcpStream.hpp"
+#include "LinuxTcpStream.h"
 #elif defined(__APPLE__)
-#include "MacTcpStream.hpp"
+#include "MacTcpStream.h"
 #else
 #error "Unsupported platform"
 #endif

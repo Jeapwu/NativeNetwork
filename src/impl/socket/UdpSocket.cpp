@@ -3,9 +3,9 @@
 #if defined(_WIN32)
 #include "WindowsUdpSocket.h"
 #elif defined(__linux__)
-#include "LinuxUdpSocket.hpp"
+#include "LinuxUdpSocket.h"
 #elif defined(__APPLE__)
-#include "MacUdpSocket.hpp"
+#include "MacUdpSocket.h"
 #else
 #error "Unsupported platform"
 #endif

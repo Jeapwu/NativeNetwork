@@ -3,9 +3,9 @@
 #if defined(_WIN32)
 #include "WindowsTcpListener.h"
 #elif defined(__linux__)
-#include "LinuxTcpListener.hpp"
+#include "LinuxTcpListener.h"
 #elif defined(__APPLE__)
-#include "MacTcpListener.hpp"
+#include "MacTcpListener.h"
 #else
 #error "Unsupported platform"
 #endif
