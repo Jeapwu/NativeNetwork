@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/TcpClient.dir/echo/tcp/TcpClient.cpp.o -o ../bin/TcpClient  -Wl,-rpath,/home/NativeNetwork/build/lib ../lib/libNativeNetwork.so 

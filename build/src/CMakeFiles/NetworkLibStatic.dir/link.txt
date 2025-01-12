@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../lib/libNativeNetwork.a CMakeFiles/NetworkLibStatic.dir/impl/listener/TcpListener.cpp.o CMakeFiles/NetworkLibStatic.dir/impl/socket/UdpSocket.cpp.o CMakeFiles/NetworkLibStatic.dir/impl/stream/TcpStream.cpp.o
+/usr/bin/ranlib ../lib/libNativeNetwork.a

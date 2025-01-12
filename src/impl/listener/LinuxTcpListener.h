@@ -18,6 +18,7 @@ namespace net
     class TcpListener::Impl
     {
     public:
+        Impl() : socket_fd_(-1), ring_(nullptr) {}
         Impl(int socket_fd, io_uring *ring) : socket_fd_(socket_fd), ring_(ring) {}
 
         ~Impl()
@@ -67,7 +68,7 @@ namespace net
                 return false;
             }
 
-            if (bind(socket_fd, reinterpret_cast<sockaddr *>(&local_addr), sizeof(local_addr)) < 0)
+            if (::bind(socket_fd_, reinterpret_cast<sockaddr *>(&local_addr), sizeof(local_addr)) < 0)
             {
                 ec = std::make_error_code(std::errc::address_in_use);
                 close(socket_fd);
@@ -76,7 +77,7 @@ namespace net
                 return false;
             }
 
-            if (listen(socket_fd, SOMAXCONN) < 0)
+            if (::listen(socket_fd_, SOMAXCONN) < 0)
             {
                 ec = std::make_error_code(std::errc::io_error);
                 close(socket_fd);
@@ -134,7 +135,7 @@ namespace net
                 return std::nullopt;
             }
 
-            return TcpStream(new TcpStream::Impl(client_socket_fd, stream_ring));
+            return TcpStream(client_socket_fd, stream_ring);
         }
 
     private:

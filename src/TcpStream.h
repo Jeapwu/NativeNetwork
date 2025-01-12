@@ -5,7 +5,9 @@
 #include <vector>
 #include <optional>
 #include <system_error>
-#include <WinSock2.h>
+
+class SOCKET;
+class io_uring;
 
 namespace net
 {
@@ -16,6 +18,7 @@ namespace net
         // 构造函数和析构函数
         TcpStream();
         TcpStream(SOCKET socket);
+        TcpStream(int socket_fd, io_uring *ring);
         ~TcpStream();
 
         // 禁用拷贝构造和赋值
