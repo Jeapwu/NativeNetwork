@@ -14,6 +14,7 @@ namespace net
     class TcpStream::Impl
     {
     public:
+        Impl() : socket_(INVALID_SOCKET) {}
         Impl(SOCKET socket) : socket_(socket) {}
 
         ~Impl()
@@ -25,8 +26,15 @@ namespace net
         }
 
         // 连接到远程地址
-        bool connect(const std::string &address, int port, std::error_code &ec)
+        bool connect(const std::string& address, int port, std::error_code& ec)
         {
+            WSADATA wsaData;
+            if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+            {
+                ec = std::make_error_code(std::errc::not_enough_memory);
+                return false;
+            }
+
             // 如果已有有效套接字，先关闭
             if (socket_ != INVALID_SOCKET)
             {
@@ -46,20 +54,20 @@ namespace net
             serverAddr.sin_port = htons(port);
             inet_pton(AF_INET, address.c_str(), &serverAddr.sin_addr);
 
-            if (::connect(socket_, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+            if (::connect(socket_, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
             {
                 ec = std::make_error_code(std::errc::connection_refused);
                 closesocket(socket_);
-                socket_ = INVALID_SOCKET;
+                socket_ = INVALID_SOCKET;  // 重置套接字状态
                 return false;
             }
 
             return true;
         }
 
-        size_t write(const std::vector<uint8_t> &data, std::error_code &ec)
+        size_t write(const std::vector<uint8_t>& data, std::error_code& ec)
         {
-            int result = ::send(socket_, reinterpret_cast<const char *>(data.data()), static_cast<int>(data.size()), 0);
+            int result = ::send(socket_, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0);
             if (result == SOCKET_ERROR)
             {
                 ec = std::make_error_code(std::errc::io_error);
@@ -68,9 +76,9 @@ namespace net
             return static_cast<size_t>(result);
         }
 
-        size_t read(std::vector<uint8_t> &buffer, std::error_code &ec)
+        size_t read(std::vector<uint8_t>& buffer, std::error_code& ec)
         {
-            int result = ::recv(socket_, reinterpret_cast<char *>(buffer.data()), static_cast<int>(buffer.size()), 0);
+            int result = ::recv(socket_, reinterpret_cast<char*>(buffer.data()), static_cast<int>(buffer.size()), 0);
             if (result == SOCKET_ERROR)
             {
                 ec = std::make_error_code(std::errc::io_error);

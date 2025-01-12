@@ -13,6 +13,8 @@
 namespace net
 {
     // TcpStream 类的构造和析构
+    TcpStream::TcpStream() : impl_(nullptr) {}
+
     TcpStream::TcpStream(SOCKET socket) : impl_(new Impl(socket)) {}
 
     TcpStream::~TcpStream()
@@ -21,12 +23,12 @@ namespace net
     }
 
     // 移动构造和赋值
-    TcpStream::TcpStream(TcpStream &&other) noexcept : impl_(other.impl_)
+    TcpStream::TcpStream(TcpStream&& other) noexcept : impl_(other.impl_)
     {
         other.impl_ = nullptr;
     }
 
-    TcpStream &TcpStream::operator=(TcpStream &&other) noexcept
+    TcpStream& TcpStream::operator=(TcpStream&& other) noexcept
     {
         if (this != &other)
         {
@@ -38,9 +40,9 @@ namespace net
     }
 
     // 连接到远程主机
-    std::optional<TcpStream> TcpStream::connect(const std::string &address, int port, std::error_code &ec)
+    std::optional<TcpStream> TcpStream::connect(const std::string& address, int port, std::error_code& ec)
     {
-        TcpStream stream(INVALID_SOCKET);
+        TcpStream stream;
         if (stream.impl_->connect(address, port, ec))
         {
             return stream;
@@ -49,7 +51,7 @@ namespace net
     }
 
     // 写数据
-    size_t TcpStream::write(const std::vector<uint8_t> &data, std::error_code &ec)
+    size_t TcpStream::write(const std::vector<uint8_t>& data, std::error_code& ec)
     {
         if (!impl_)
         {
@@ -60,7 +62,7 @@ namespace net
     }
 
     // 读数据
-    size_t TcpStream::read(std::vector<uint8_t> &buffer, std::error_code &ec)
+    size_t TcpStream::read(std::vector<uint8_t>& buffer, std::error_code& ec)
     {
         if (!impl_)
         {
