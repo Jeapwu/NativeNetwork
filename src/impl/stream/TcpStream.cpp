@@ -1,7 +1,7 @@
-#include "TcpStream.hpp"
+#include "TcpStream.h"
 
 #if defined(_WIN32)
-#include "WindowsTcpStream.hpp"
+#include "WindowsTcpStream.h"
 #elif defined(__linux__)
 #include "LinuxTcpStream.hpp"
 #elif defined(__APPLE__)
@@ -13,7 +13,7 @@
 namespace net
 {
     // TcpStream 类的构造和析构
-    TcpStream::TcpStream() : impl_(nullptr) {}
+    TcpStream::TcpStream(SOCKET socket) : impl_(new Impl(socket)) {}
 
     TcpStream::~TcpStream()
     {
@@ -40,7 +40,7 @@ namespace net
     // 连接到远程主机
     std::optional<TcpStream> TcpStream::connect(const std::string &address, int port, std::error_code &ec)
     {
-        TcpStream stream;
+        TcpStream stream(INVALID_SOCKET);
         if (stream.impl_->connect(address, port, ec))
         {
             return stream;

@@ -1,83 +1,78 @@
 #include <iostream>
-#include <thread>
 #include <vector>
-#include <string>
+#include <thread>
 #include <optional>
 #include <system_error>
-#include "src/TcpListener.hpp" // 假设已实现
-#include "src/TcpStream.hpp"   // 假设已实现
+#include "TcpListener.h"
+#include "TcpStream.h"
 
-void handleClient(net::TcpStream stream)
+void handle_client(net::TcpStream client)
 {
-    std::error_code ec;
-    char buffer[1024];
-
-    while (true)
+    try
     {
-        // 读取客户端发送的数据
-        auto bytesRead = stream.read(buffer, sizeof(buffer), ec);
+        std::error_code ec;
+        std::vector<uint8_t> buffer(1024);
+
+        // 读取数据
+        size_t bytesRead = client.read(buffer, ec);
         if (ec)
         {
-            std::cerr << "Read error: " << ec.message() << std::endl;
-            break;
+            std::cerr << "Error reading from client: " << ec.message() << std::endl;
+            return;
         }
 
-        if (bytesRead == 0)
-        {
-            std::cout << "Client disconnected." << std::endl;
-            break;
-        }
+        std::cout << "Received: " << std::string(buffer.begin(), buffer.begin() + bytesRead) << std::endl;
 
-        std::string message(buffer, bytesRead);
-        std::cout << "Received: " << message << std::endl;
-
-        // 回显数据给客户端
-        stream.write(message.data(), message.size(), ec);
+        // 回写数据
+        std::string response = "Hello from server!";
+        std::vector<uint8_t> responseData(response.begin(), response.end());
+        client.write(responseData, ec);
         if (ec)
         {
-            std::cerr << "Write error: " << ec.message() << std::endl;
-            break;
+            std::cerr << "Error writing to client: " << ec.message() << std::endl;
         }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Exception in client handler: " << e.what() << std::endl;
     }
 }
 
 int main()
 {
-    std::error_code ec;
-    auto listenerOpt = net::TcpListener::bind("127.0.0.1", 8080, ec);
-    if (!listenerOpt)
+    WSADATA wsaData;
+    int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (result != 0)
     {
-        std::cerr << "Failed to bind listener: " << ec.message() << std::endl;
-        return 1;
+        std::cerr << "WSAStartup failed with error: " << result << std::endl;
+        return -1;
     }
 
-    auto listener = std::move(*listenerOpt);
-    std::cout << "Server is listening on 127.0.0.1:8080..." << std::endl;
+    std::error_code ec;
+    // 启动监听
+    auto listenerOpt = net::TcpListener::bind("127.0.0.1", 9090, ec);
+    if (!listenerOpt)
+    {
+        std::cerr << "Failed to bind: " << ec.message() << std::endl;
+        WSACleanup();
+        return -1;
+    }
 
-    std::vector<std::thread> clientThreads;
+    net::TcpListener listener = std::move(*listenerOpt);
+    std::cout << "Server listening on 127.0.0.1:9090" << std::endl;
 
     while (true)
     {
-        auto streamOpt = listener.accept(ec);
-        if (!streamOpt)
+        auto clientOpt = listener.accept(ec);
+        if (!clientOpt)
         {
-            std::cerr << "Accept error: " << ec.message() << std::endl;
+            std::cerr << "Failed to accept connection: " << ec.message() << std::endl;
             continue;
         }
 
-        std::cout << "Client connected." << std::endl;
-
-        // 创建一个线程处理客户端
-        clientThreads.emplace_back(handleClient, std::move(*streamOpt));
+        std::thread(handle_client, std::move(*clientOpt)).detach();
     }
 
-    for (auto &thread : clientThreads)
-    {
-        if (thread.joinable())
-        {
-            thread.join();
-        }
-    }
-
+    WSACleanup(); // 在程序结束时清理 Winsock
     return 0;
 }

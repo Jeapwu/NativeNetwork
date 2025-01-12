@@ -1,53 +1,52 @@
 #include <iostream>
-#include <string>
+#include <vector>
+#include <optional>
 #include <system_error>
-#include "TcpStream.hpp" // 假设已实现
+#include "TcpStream.h"
 
 int main()
 {
-    std::error_code ec;
+    WSADATA wsaData;
+    int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (result != 0)
+    {
+        std::cerr << "WSAStartup failed with error: " << result << std::endl;
+        return -1;
+    }
 
-    // 连接到服务器
-    auto streamOpt = net::TcpStream::connect("127.0.0.1", 8080, ec);
+    // 连接到服务端
+    std::error_code ec;
+    auto streamOpt = net::TcpStream::connect("127.0.0.1", 9090, ec);
     if (!streamOpt)
     {
         std::cerr << "Failed to connect to server: " << ec.message() << std::endl;
-        return 1;
+        WSACleanup();
+        return -1;
     }
 
-    auto stream = std::move(*streamOpt);
-    std::cout << "Connected to server." << std::endl;
-
-    std::string message;
-    char buffer[1024];
-
-    while (true)
+    // 发送数据
+    net::TcpStream stream = std::move(*streamOpt);
+    std::string message = "Hello from client!";
+    std::vector<uint8_t> data(message.begin(), message.end());
+    stream.write(data, ec);
+    if (ec)
     {
-        std::cout << "Enter message: ";
-        std::getline(std::cin, message);
-        if (message == "exit")
-        {
-            break;
-        }
-
-        // 发送数据给服务器
-        stream.write(message.data(), message.size(), ec);
-        if (ec)
-        {
-            std::cerr << "Write error: " << ec.message() << std::endl;
-            break;
-        }
-
-        // 接收服务器的回显数据
-        auto bytesRead = stream.read(buffer, sizeof(buffer), ec);
-        if (ec)
-        {
-            std::cerr << "Read error: " << ec.message() << std::endl;
-            break;
-        }
-
-        std::cout << "Server echoed: " << std::string(buffer, bytesRead) << std::endl;
+        std::cerr << "Error writing to server: " << ec.message() << std::endl;
+        WSACleanup();
+        return -1;
     }
 
+    // 接收响应
+    std::vector<uint8_t> buffer(1024);
+    size_t bytesRead = stream.read(buffer, ec);
+    if (ec)
+    {
+        std::cerr << "Error reading from server: " << ec.message() << std::endl;
+        WSACleanup();
+        return -1;
+    }
+
+    std::cout << "Received: " << std::string(buffer.begin(), buffer.begin() + bytesRead) << std::endl;
+    WSACleanup();
     return 0;
 }

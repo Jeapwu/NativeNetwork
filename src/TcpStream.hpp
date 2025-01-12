@@ -5,15 +5,15 @@
 #include <vector>
 #include <optional>
 #include <system_error>
+#include <WinSock2.h>
 
 namespace net
 {
-
     class TcpStream
     {
     public:
         // 构造函数和析构函数
-        TcpStream();
+        TcpStream(SOCKET socket);
         ~TcpStream();
 
         // 禁用拷贝构造和赋值
@@ -33,7 +33,7 @@ namespace net
         // 读取数据
         size_t read(std::vector<uint8_t> &buffer, std::error_code &ec);
 
-    private:
+    public:
         class Impl; // 平台特定实现
         Impl *impl_;
     };

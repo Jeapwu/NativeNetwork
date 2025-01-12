@@ -10,7 +10,6 @@
 
 namespace net
 {
-
     // TcpStream::Impl 实现
     class TcpStream::Impl
     {
@@ -28,15 +27,15 @@ namespace net
         // 连接到远程地址
         bool connect(const std::string &address, int port, std::error_code &ec)
         {
-            WSADATA wsaData;
-            if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+            // 如果已有有效套接字，先关闭
+            if (socket_ != INVALID_SOCKET)
             {
-                ec = std::make_error_code(std::errc::not_enough_memory);
-                return false;
+                closesocket(socket_);
             }
 
-            SOCKET socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-            if (socket == INVALID_SOCKET)
+            // 创建新的套接字
+            socket_ = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+            if (socket_ == INVALID_SOCKET)
             {
                 ec = std::make_error_code(std::errc::address_family_not_supported);
                 return false;
@@ -47,14 +46,14 @@ namespace net
             serverAddr.sin_port = htons(port);
             inet_pton(AF_INET, address.c_str(), &serverAddr.sin_addr);
 
-            if (::connect(socket, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+            if (::connect(socket_, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
             {
                 ec = std::make_error_code(std::errc::connection_refused);
-                closesocket(socket);
+                closesocket(socket_);
+                socket_ = INVALID_SOCKET;
                 return false;
             }
 
-            socket_ = socket; // 保存已连接的套接字
             return true;
         }
 
