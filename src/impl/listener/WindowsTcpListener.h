@@ -47,6 +47,13 @@ namespace net
         // 绑定地址和端口
         bool bind(const std::string& address, int port, std::error_code& ec)
         {
+            WSADATA wsaData;
+            if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+            {
+                ec = std::make_error_code(std::errc::not_enough_memory);
+                return false;
+            }
+
             iocpHandle_ = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
             if (iocpHandle_ == nullptr)
             {

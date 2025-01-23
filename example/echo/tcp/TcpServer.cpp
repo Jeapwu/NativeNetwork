@@ -32,7 +32,7 @@ void handle_client(net::TcpStream client)
             std::cerr << "Error writing to client: " << ec.message() << std::endl;
         }
     }
-    catch (const std::exception& e)
+    catch (const std::exception &e)
     {
         std::cerr << "Exception in client handler: " << e.what() << std::endl;
     }
@@ -40,21 +40,12 @@ void handle_client(net::TcpStream client)
 
 int main()
 {
-    WSADATA wsaData;
-    int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (result != 0)
-    {
-        std::cerr << "WSAStartup failed with error: " << result << std::endl;
-        return -1;
-    }
-
     std::error_code ec;
     // 启动监听
     auto listenerOpt = net::TcpListener::bind("127.0.0.1", 9090, ec);
     if (!listenerOpt)
     {
         std::cerr << "Failed to bind: " << ec.message() << std::endl;
-        WSACleanup();
         return -1;
     }
 
@@ -72,7 +63,5 @@ int main()
 
         std::thread(handle_client, std::move(*clientOpt)).detach();
     }
-
-    WSACleanup(); // 在程序结束时清理 Winsock
     return 0;
 }
