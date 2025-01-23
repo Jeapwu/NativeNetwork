@@ -120,53 +120,6 @@ namespace net
             return bytes_sent;
         }
 
-        // size_t recv_from(std::vector<uint8_t> &buffer, std::string &sender_address, int &sender_port, std::error_code &ec)
-        // {
-        //     if (socket_fd_ < 0 || !ring_)
-        //     {
-        //         ec = std::make_error_code(std::errc::bad_file_descriptor);
-        //         return 0;
-        //     }
-
-        //     sockaddr_in sender_addr = {};
-        //     socklen_t addr_len = sizeof(sender_addr);
-
-        //     io_uring_sqe *sqe = io_uring_get_sqe(ring_);
-        //     if (!sqe)
-        //     {
-        //         ec = std::make_error_code(std::errc::resource_unavailable_try_again);
-        //         return 0;
-        //     }
-
-        //     io_uring_prep_recvmsg(sqe, socket_fd_, buffer.data(), buffer.size(), 0,
-        //                           reinterpret_cast<sockaddr *>(&sender_addr), &addr_len);
-        //     io_uring_submit(ring_);
-
-        //     io_uring_cqe *cqe;
-        //     if (io_uring_wait_cqe(ring_, &cqe) < 0)
-        //     {
-        //         ec = std::make_error_code(std::errc::io_error);
-        //         return 0;
-        //     }
-
-        //     if (cqe->res < 0)
-        //     {
-        //         ec = std::make_error_code(std::errc::io_error);
-        //         io_uring_cqe_seen(ring_, cqe);
-        //         return 0;
-        //     }
-
-        //     size_t bytes_received = cqe->res;
-        //     io_uring_cqe_seen(ring_, cqe);
-
-        //     char addr_str[INET_ADDRSTRLEN];
-        //     inet_ntop(AF_INET, &sender_addr.sin_addr, addr_str, sizeof(addr_str));
-        //     sender_address = addr_str;
-        //     sender_port = ntohs(sender_addr.sin_port);
-
-        //     return bytes_received;
-        // }
-
         size_t recv_from(std::vector<uint8_t> &buffer, std::string &sender_address, int &sender_port, std::error_code &ec)
         {
             if (socket_fd_ < 0 || !ring_)

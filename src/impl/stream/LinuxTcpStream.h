@@ -98,20 +98,25 @@ namespace net
 
         size_t write(const std::vector<uint8_t> &data, std::error_code &ec)
         {
-            if (!impl_)
+            if (socket_fd_ < 0)
             {
                 ec = std::make_error_code(std::errc::bad_file_descriptor);
                 return 0;
             }
 
             // 使用 io_uring 提交异步写入请求
-            io_uring_sqe *sqe = io_uring_get_sqe(impl_->ring_);
-            io_uring_prep_write(sqe, impl_->socket_fd_, data.data(), data.size(), 0);
-            io_uring_submit(impl_->ring_);
+            io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+            if (!sqe)
+            {
+                ec = std::make_error_code(std::errc::resource_unavailable_try_again);
+                return 0;
+            }
+            io_uring_prep_write(sqe, socket_fd_, data.data(), data.size(), 0);
+            io_uring_submit(ring_);
 
             // 等待写入完成
-            io_uring_cqe *cqe;
-            if (io_uring_wait_cqe(impl_->ring_, &cqe) < 0)
+            io_uring_cqe *cqe = nullptr;
+            if (io_uring_wait_cqe(ring_, &cqe) < 0)
             {
                 ec = std::make_error_code(std::errc::io_error);
                 return 0;
@@ -119,32 +124,37 @@ namespace net
 
             if (cqe->res < 0)
             {
-                ec = std::make_error_code(std::errc::io_error);
-                io_uring_cqe_seen(impl_->ring_, cqe);
+                ec = std::error_code(-cqe->res, std::generic_category());
+                io_uring_cqe_seen(ring_, cqe);
                 return 0;
             }
 
             size_t bytes_written = cqe->res;
-            io_uring_cqe_seen(impl_->ring_, cqe);
+            io_uring_cqe_seen(ring_, cqe);
             return bytes_written;
         }
 
         size_t read(std::vector<uint8_t> &buffer, std::error_code &ec)
         {
-            if (!impl_)
+            if (socket_fd_ < 0)
             {
                 ec = std::make_error_code(std::errc::bad_file_descriptor);
                 return 0;
             }
 
             // 使用 io_uring 提交异步读取请求
-            io_uring_sqe *sqe = io_uring_get_sqe(impl_->ring_);
-            io_uring_prep_read(sqe, impl_->socket_fd_, buffer.data(), buffer.size(), 0);
-            io_uring_submit(impl_->ring_);
+            io_uring_sqe *sqe = io_uring_get_sqe(ring_);
+            if (!sqe)
+            {
+                ec = std::make_error_code(std::errc::resource_unavailable_try_again);
+                return 0;
+            }
+            io_uring_prep_read(sqe, socket_fd_, buffer.data(), buffer.size(), 0);
+            io_uring_submit(ring_);
 
             // 等待读取完成
-            io_uring_cqe *cqe;
-            if (io_uring_wait_cqe(impl_->ring_, &cqe) < 0)
+            io_uring_cqe *cqe = nullptr;
+            if (io_uring_wait_cqe(ring_, &cqe) < 0)
             {
                 ec = std::make_error_code(std::errc::io_error);
                 return 0;
@@ -152,19 +162,19 @@ namespace net
 
             if (cqe->res < 0)
             {
-                ec = std::make_error_code(std::errc::io_error);
-                io_uring_cqe_seen(impl_->ring_, cqe);
+                ec = std::error_code(-cqe->res, std::generic_category());
+                io_uring_cqe_seen(ring_, cqe);
                 return 0;
             }
 
             size_t bytes_read = cqe->res;
-            io_uring_cqe_seen(impl_->ring_, cqe);
+            io_uring_cqe_seen(ring_, cqe);
             return bytes_read;
         }
 
     private:
-        int socket_fd_;
-        io_uring *ring_;
+        int socket_fd_ = -1;
+        io_uring *ring_ = nullptr;
     };
 
 } // namespace net
