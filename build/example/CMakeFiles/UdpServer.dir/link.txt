@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/UdpServer.dir/echo/udp/UdpServer.cpp.o -o ../bin/UdpServer  -Wl,-rpath,/home/NativeNetwork/build/lib ../lib/libNativeNetwork.so 
