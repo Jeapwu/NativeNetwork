@@ -120,7 +120,7 @@ namespace net
             return bytes_sent;
         }
 
-        size_t recv_from(std::vector<uint8_t> &buffer, std::string &sender_address, int &sender_port, std::error_code &ec)
+        size_t recv_from(std::vector<uint8_t> &buffer, std::string &address, int &port, std::error_code &ec)
         {
             if (socket_fd_ < 0 || !ring_)
             {
@@ -179,8 +179,8 @@ namespace net
             // 提取发送方地址和端口
             char addr_str[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &sender_addr.sin_addr, addr_str, sizeof(addr_str));
-            sender_address = addr_str;
-            sender_port = ntohs(sender_addr.sin_port);
+            address = addr_str;
+            port = ntohs(sender_addr.sin_port);
 
             return bytes_received;
         }
