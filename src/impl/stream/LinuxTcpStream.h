@@ -16,6 +16,7 @@ namespace net
     class TcpStream::Impl
     {
     public:
+		Impl() : socket_fd_(-1), ring_(nullptr) {}
         Impl(int socket_fd, io_uring *ring) : socket_fd_(socket_fd), ring_(ring) {}
 
         ~Impl()

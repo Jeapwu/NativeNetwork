@@ -17,6 +17,8 @@ namespace net
 
     TcpStream::TcpStream(SOCKET socket) : impl_(new Impl(socket)) {}
 
+	TcpStream::TcpStream(int socket_fd, io_uring *ring) : impl_(new Impl(socket_fd, ring)) {}
+	
     TcpStream::~TcpStream()
     {
         delete impl_;
